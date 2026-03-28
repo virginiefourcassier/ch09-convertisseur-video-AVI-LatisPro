@@ -195,13 +195,14 @@
       resultBox.innerHTML = message;
     }
 
+    // Chargement de FFmpeg sans utiliser son worker interne
     async function ensureFFmpegLoaded() {
       if (ffmpegLoaded) return;
 
       showStatus("⏳ Chargement du moteur de conversion… cela peut prendre un peu de temps la première fois.");
       hideError();
 
-      ffmpeg = new FFmpeg();
+      ffmpeg = new FFmpeg({ core: { useWorker: false } });
 
       ffmpeg.on("log", ({ message }) => {
         console.log(message);
@@ -211,12 +212,10 @@
 
       const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript");
       const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm");
-      const workerURL = await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript");
 
       await ffmpeg.load({
         coreURL,
-        wasmURL,
-        workerURL
+        wasmURL
       });
 
       ffmpegLoaded = true;
