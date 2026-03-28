@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Convertisseur vidéo AVI – Spécial LatisPro</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3e8ff;
+      color: #2d0052;
+      margin: 0;
+      padding: 24px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 4px solid #6d10b1;
+      border-radius: 18px;
+      padding: 24px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+    }
+    h1 {
+      text-align: center;
+      color: #4b0082;
+      margin-top: 0;
+    }
+    .info {
+      background: #f8f2ff;
+      border-left: 6px solid #6d10b1;
+      padding: 14px;
+      border-radius: 10px;
+      margin: 18px 0;
+      line-height: 1.5;
+    }
+    .dropzone {
+      border: 3px dashed #6d10b1;
+      border-radius: 16px;
+      padding: 28px;
+      text-align: center;
+      background: #fcf9ff;
+      margin: 20px 0;
+    }
+    input[type="file"] {
+      margin-top: 12px;
+      font-size: 16px;
+    }
+    button {
+      background: #6d10b1;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 14px 22px;
+      font-size: 18px;
+      cursor: pointer;
+      margin-top: 18px;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .status, .result, .error {
+      margin-top: 18px;
+      padding: 14px;
+      border-radius: 12px;
+      line-height: 1.5;
+    }
+    .status {
+      background: #eef7ff;
+      border-left: 6px solid #2979ff;
+    }
+    .result {
+      background: #eefbea;
+      border-left: 6px solid #2e7d32;
+    }
+    .error {
+      background: #fff1f1;
+      border-left: 6px solid #c62828;
+    }
+    .small {
+      font-size: 14px;
+      color: #5c4a73;
+    }
+    a.download-link {
+      display: inline-block;
+      margin-top: 10px;
+      font-weight: bold;
+      color: #4b0082;
+      text-decoration: none;
+    }
+    video {
+      max-width: 100%;
+      margin-top: 12px;
+      border-radius: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎥 Convertisseur vidéo vers AVI<br>Spécial LatisPro</h1>
+
+    <div class="info">
+      <strong>Formats acceptés :</strong> formats vidéo élèves réalistes (.mp4, .mov, .wmv, .avi, .mkv, .webm, etc.)<br>
+      <strong>Durée maximale :</strong> 90 s<br>
+      <strong>Son :</strong> supprimé<br>
+      <strong>Objectif :</strong> produire un fichier AVI de très bonne qualité pour le pointage dans LatisPro.
+    </div>
+
+    <div class="dropzone">
+      <div><strong>Déposez une vidéo ou cliquez pour la choisir</strong></div>
+      <input type="file" id="videoInput" accept="video/*" />
+      <div class="small">La conversion se fera directement dans le navigateur.</div>
+      <video id="preview" controls style="display:none;"></video>
+    </div>
+
+    <button id="convertBtn" disabled>Lancer la conversion</button>
+
+    <div id="status" class="status" style="display:none;"></div>
+    <div id="result" class="result" style="display:none;"></div>
+    <div id="error" class="error" style="display:none;"></div>
+  </div>
+
+  <script type="module">
+    import { FFmpeg } from "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js";
+    import { fetchFile, toBlobURL } from "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js";
+
+    const videoInput = document.getElementById("videoInput");
+    const preview = document.getElementById("preview");
+    const convertBtn = document.getElementById("convertBtn");
+    const statusBox = document.getElementById("status");
+    const resultBox = document.getElementById("result");
+    const errorBox = document.getElementById("error");
+
+    let selectedFile = null;
+    let ffmpeg = null;
+    let ffmpegLoaded = false;
+
+    function showStatus(message) {
+      statusBox.style.display = "block";
+      statusBox.innerHTML = message;
+    }
+
+    function showError(message) {
+      errorBox.style.display = "block";
+      errorBox.innerHTML = message;
+    }
+
+    function hideError() {
+      errorBox.style.display = "none";
+      errorBox.innerHTML = "";
+    }
+
+    function showResult(message) {
+      resultBox.style.display = "block";
+      resultBox.innerHTML = message;
+    }
+
+    async function ensureFFmpegLoaded() {
+      if (ffmpegLoaded) return;
+
+      showStatus("⏳ Chargement du moteur de conversion… cela peut prendre un peu de temps la première fois.");
+
+      ffmpeg = new FFmpeg();
+
+      ffmpeg.on("log", ({ message }) => {
+        console.log(message);
+      });
+
+      const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm";
+
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+      });
+
+      ffmpegLoaded = true;
+    }
+
+    videoInput.addEventListener("change", async (event) => {
+      hideError();
+      showResult("");
+      resultBox.style.display = "none";
+
+      const file = event.target.files[0];
+      selectedFile = file || null;
+
+      if (!selectedFile) {
+        convertBtn.disabled = true;
+        preview.style.display = "none";
+        return;
+      }
+
+      const objectURL = URL.createObjectURL(selectedFile);
+      preview.src = objectURL;
+      preview.style.display = "block";
+      convertBtn.disabled = false;
+    });
+
+    convertBtn.addEventListener("click", async () => {
+      hideError();
+      resultBox.style.display = "none";
+
+      if (!selectedFile) {
+        showError("❌ Aucun fichier vidéo sélectionné.");
+        return;
+      }
+
+      convertBtn.disabled = true;
+
+      try {
+        await ensureFFmpegLoaded();
+
+        showStatus("🔍 Vérification de la durée de la vidéo…");
+
+        const tempVideo = document.createElement("video");
+        tempVideo.preload = "metadata";
+        tempVideo.src = URL.createObjectURL(selectedFile);
+
+        await new Promise((resolve, reject) => {
+          tempVideo.onloadedmetadata = () => resolve();
+          tempVideo.onerror = () => reject(new Error("Impossible de lire les métadonnées de la vidéo."));
+        });
+
+        if (tempVideo.duration > 90) {
+          throw new Error("La vidéo dépasse 90 secondes. Merci de raccourcir la vidéo avant conversion.");
+        }
+
+        const inputName = "video_entree";
+        const outputName = "video_pour_latispro.avi";
+
+        showStatus("📥 Chargement de la vidéo dans le convertisseur…");
+        await ffmpeg.writeFile(inputName, await fetchFile(selectedFile));
+
+        showStatus("⚙️ Conversion en cours… Patientez. La durée dépend de la taille du fichier.");
+
+        await ffmpeg.exec([
+          "-i", inputName,
+          "-t", "90",
+          "-an",
+          "-vcodec", "mjpeg",
+          "-q:v", "2",
+          "-pix_fmt", "yuvj422p",
+          "-r", "25",
+          outputName
+        ]);
+
+        showStatus("📦 Récupération du fichier converti…");
+
+        const data = await ffmpeg.readFile(outputName);
+        const blob = new Blob([data.buffer], { type: "video/x-msvideo" });
+        const url = URL.createObjectURL(blob);
+
+        showResult(`
+          ✅ Conversion terminée.<br>
+          <a class="download-link" href="${url}" download="video_pour_latispro.avi">
+            ⬇️ Télécharger le fichier AVI
+          </a>
+        `);
+
+        showStatus("✔️ Le fichier AVI est prêt.");
+      } catch (err) {
+        console.error(err);
+        showError(`❌ ${err.message}`);
+        showStatus("Conversion interrompue.");
+      } finally {
+        convertBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
