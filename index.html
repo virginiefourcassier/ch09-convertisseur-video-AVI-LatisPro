@@ -155,9 +155,11 @@
     </div>
   </div>
 
-  <script type="module">
-    import { FFmpeg } from "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/ffmpeg.js";
-    import { fetchFile } from "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js";
+  <!-- Build single-thread packagée, sans worker séparé -->
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/ffmpeg-core.js"></script>
+
+  <script>
+    const { createFFmpeg, fetchFile } = FFmpeg;
 
     const videoInput = document.getElementById("videoInput");
     const preview = document.getElementById("preview");
@@ -167,7 +169,7 @@
     const errorBox = document.getElementById("error");
 
     let selectedFile = null;
-    let ffmpeg = null;
+    const ffmpeg = createFFmpeg({ corePath: "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js", mainName: "main" });
     let ffmpegLoaded = false;
 
     function showStatus(message) {
@@ -197,19 +199,9 @@
 
     async function ensureFFmpegLoaded() {
       if (ffmpegLoaded) return;
-
       showStatus("⏳ Chargement du moteur de conversion… cela peut prendre un peu de temps la première fois.");
       hideError();
-
-      ffmpeg = new FFmpeg();
-
-      ffmpeg.on("log", ({ message }) => {
-        console.log(message);
-      });
-
-      // IMPORTANT : ne pas surcharger workerURL, laisser la lib utiliser son propre worker.
       await ffmpeg.load();
-
       ffmpegLoaded = true;
     }
 
@@ -265,15 +257,15 @@
           throw new Error("La vidéo dépasse 90 secondes. Merci de raccourcir la vidéo avant conversion.");
         }
 
-        const inputName = "video_entree";
+        const inputName = "video_entree.mp4";
         const outputName = "video_pour_latispro.avi";
 
         showStatus("📥 Chargement de la vidéo dans le convertisseur…");
-        await ffmpeg.writeFile(inputName, await fetchFile(selectedFile));
+        ffmpeg.FS("writeFile", inputName, await fetchFile(selectedFile));
 
         showStatus("⚙️ Conversion en cours… Patientez. Cela peut prendre du temps selon la taille du fichier.");
 
-        await ffmpeg.exec([
+        await ffmpeg.run(
           "-i", inputName,
           "-t", "90",
           "-an",
@@ -282,11 +274,11 @@
           "-pix_fmt", "yuvj422p",
           "-r", "25",
           outputName
-        ]);
+        );
 
         showStatus("📦 Préparation du fichier converti…");
 
-        const data = await ffmpeg.readFile(outputName);
+        const data = ffmpeg.FS("readFile", outputName);
         const blob = new Blob([data.buffer], { type: "video/x-msvideo" });
         const url = URL.createObjectURL(blob);
 
