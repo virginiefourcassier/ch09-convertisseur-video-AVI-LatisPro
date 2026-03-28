@@ -12,6 +12,7 @@
       margin: 0;
       padding: 24px;
     }
+
     .container {
       max-width: 900px;
       margin: 0 auto;
@@ -21,19 +22,23 @@
       padding: 24px;
       box-shadow: 0 12px 30px rgba(0,0,0,0.15);
     }
+
     h1 {
       text-align: center;
       color: #4b0082;
       margin-top: 0;
+      line-height: 1.3;
     }
+
     .info {
       background: #f8f2ff;
       border-left: 6px solid #6d10b1;
       padding: 14px;
       border-radius: 10px;
       margin: 18px 0;
-      line-height: 1.5;
+      line-height: 1.6;
     }
+
     .dropzone {
       border: 3px dashed #6d10b1;
       border-radius: 16px;
@@ -42,10 +47,12 @@
       background: #fcf9ff;
       margin: 20px 0;
     }
+
     input[type="file"] {
       margin-top: 12px;
       font-size: 16px;
     }
+
     button {
       background: #6d10b1;
       color: white;
@@ -56,43 +63,66 @@
       cursor: pointer;
       margin-top: 18px;
     }
+
     button:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
+
     .status, .result, .error {
       margin-top: 18px;
       padding: 14px;
       border-radius: 12px;
-      line-height: 1.5;
+      line-height: 1.6;
     }
+
     .status {
       background: #eef7ff;
       border-left: 6px solid #2979ff;
     }
+
     .result {
       background: #eefbea;
       border-left: 6px solid #2e7d32;
     }
+
     .error {
       background: #fff1f1;
       border-left: 6px solid #c62828;
     }
+
     .small {
       font-size: 14px;
       color: #5c4a73;
+      margin-top: 8px;
     }
+
     a.download-link {
       display: inline-block;
       margin-top: 10px;
       font-weight: bold;
       color: #4b0082;
       text-decoration: none;
+      font-size: 18px;
     }
+
+    a.download-link:hover {
+      text-decoration: underline;
+    }
+
     video {
       max-width: 100%;
       margin-top: 12px;
       border-radius: 12px;
+    }
+
+    .footer {
+      margin-top: 26px;
+      text-align: center;
+      font-size: 14px;
+      color: #6d10b1;
+      border-top: 2px solid #ead7ff;
+      padding-top: 14px;
     }
   </style>
 </head>
@@ -110,7 +140,7 @@
     <div class="dropzone">
       <div><strong>Déposez une vidéo ou cliquez pour la choisir</strong></div>
       <input type="file" id="videoInput" accept="video/*" />
-      <div class="small">La conversion se fera directement dans le navigateur.</div>
+      <div class="small">La conversion se fait directement dans le navigateur.</div>
       <video id="preview" controls style="display:none;"></video>
     </div>
 
@@ -119,6 +149,10 @@
     <div id="status" class="status" style="display:none;"></div>
     <div id="result" class="result" style="display:none;"></div>
     <div id="error" class="error" style="display:none;"></div>
+
+    <div class="footer">
+      Virginie Fourcassier. Lycée Pierre de Fermat. Toulouse
+    </div>
   </div>
 
   <script type="module">
@@ -151,6 +185,11 @@
       errorBox.innerHTML = "";
     }
 
+    function hideResult() {
+      resultBox.style.display = "none";
+      resultBox.innerHTML = "";
+    }
+
     function showResult(message) {
       resultBox.style.display = "block";
       resultBox.innerHTML = message;
@@ -172,15 +211,15 @@
       await ffmpeg.load({
         coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
         wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+        workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript"),
       });
 
       ffmpegLoaded = true;
     }
 
-    videoInput.addEventListener("change", async (event) => {
+    videoInput.addEventListener("change", (event) => {
       hideError();
-      showResult("");
-      resultBox.style.display = "none";
+      hideResult();
 
       const file = event.target.files[0];
       selectedFile = file || null;
@@ -188,6 +227,8 @@
       if (!selectedFile) {
         convertBtn.disabled = true;
         preview.style.display = "none";
+        preview.removeAttribute("src");
+        preview.load();
         return;
       }
 
@@ -195,11 +236,12 @@
       preview.src = objectURL;
       preview.style.display = "block";
       convertBtn.disabled = false;
+      showStatus("📁 Vidéo chargée. Vous pouvez lancer la conversion.");
     });
 
     convertBtn.addEventListener("click", async () => {
       hideError();
-      resultBox.style.display = "none";
+      hideResult();
 
       if (!selectedFile) {
         showError("❌ Aucun fichier vidéo sélectionné.");
@@ -232,7 +274,7 @@
         showStatus("📥 Chargement de la vidéo dans le convertisseur…");
         await ffmpeg.writeFile(inputName, await fetchFile(selectedFile));
 
-        showStatus("⚙️ Conversion en cours… Patientez. La durée dépend de la taille du fichier.");
+        showStatus("⚙️ Conversion en cours… Patientez. Cela peut prendre un peu de temps selon la taille du fichier.");
 
         await ffmpeg.exec([
           "-i", inputName,
@@ -245,7 +287,7 @@
           outputName
         ]);
 
-        showStatus("📦 Récupération du fichier converti…");
+        showStatus("📦 Préparation du fichier converti…");
 
         const data = await ffmpeg.readFile(outputName);
         const blob = new Blob([data.buffer], { type: "video/x-msvideo" });
